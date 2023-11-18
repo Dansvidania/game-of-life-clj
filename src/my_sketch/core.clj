@@ -4,8 +4,8 @@
             [clojure.test :refer [is]])
   (:gen-class))
 
-(def grid-size 100)
-(def cell-size 5)
+(def grid-size 120)
+(def cell-size 10)
 
 (defn pos->xy [^long world-size ^long pos]
   [(mod pos (Math/sqrt world-size)) ; x = position % world size
@@ -63,14 +63,14 @@
   (q/no-stroke)
   {:world (^booleans vec (take (* grid-size grid-size) (repeatedly #(rand-bool))))
    :total-count (* grid-size grid-size)
-   :side-count (Math/sqrt (* grid-size grid-size))
+   :side-count grid-size
    :pos-range (range (* grid-size grid-size))})
 
 (defn update-life [{^booleans world :world
                     ^longs pos-range :pos-range
                     ^long total-count :total-count
                     :as state}]
-  (assoc state :world (->> (partition (int (Math/ceil (/ total-count 4))) pos-range)
+  (assoc state :world (->> (partition (int (Math/ceil (/ total-count 16))) pos-range)
                            (pmap (fn [partitioned-range]
                                    (mapv #(evaluate-cell-life total-count world %) partitioned-range)))
                            ((comp vec flatten)))))
@@ -97,24 +97,3 @@
     :draw draw-life
     :features [:keep-on-top]
     :middleware [m/fun-mode]))
-
-;(time (take 1 (iterate update-life {:world (into [] (take (* grid-size grid-size) (repeatedly #(rand-bool))))})))
-
-; took ~9000 msec
-;(time (dotimes [i 10000]
-;        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))})))
-
-; took 6800-7400 msec 
-; booleans instead of 0 and 1s and precomputed counts: 6800-7400 msec
-; type hints on function arguments: ~6400 ms
-; removed pre/post conditions: ~4800ms
-; use (doall (pmap ...)) instead of mapv: ~6600ms which is interesting 
-
-(def world-vect (into [] (take (* 3 3) (repeatedly #(rand-bool)))))
-(def partitioned-range (partition (int (Math/ceil (/ (count world-vect) 4))) (range 9)))
-(def pmapped (pmap (fn [part-range] (mapv #(evaluate-cell-life 9 world-vect %) part-range)) partitioned-range))
-((comp vec flatten) pmapped)
-;(time (dotimes [i 10000]
-;        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
-;                      :total-count (* 10 10)
-;                      :pos-range (range (* 10 10))})))
