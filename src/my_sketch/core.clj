@@ -7,21 +7,21 @@
 (def grid-size 100)
 (def cell-size 5)
 
-(defn pos->xy [world-size pos]
+(defn pos->xy [^long world-size ^long pos]
   [(mod pos (Math/sqrt world-size)) ; x = position % world size
    (quot pos (Math/sqrt world-size)) ; y = round down to lowest multiple of world size 
    ])
 
-(defn xy->pos [world-size [x y]]
+(defn xy->pos [^long world-size [^long x ^long y]]
   (let [grid-size (Math/sqrt world-size)]
     (int (+ (* grid-size y) x))))
 
-(defn neighbour-pos [world-size pos]
-  {:pre [(<= 0 pos) (<= 0 world-size) (< pos world-size)]
-   :post [(every? #(<= 0 %) %) ; all neighbour positions are positive
-          (every? #(not= % pos) %) ; all neighbour positions are not equal to pos
-          (every? #(< % world-size) %) ; all neighbour positions are less than world size
-          ]}
+(defn neighbour-pos [^long world-size ^long pos]
+  ;{:pre [(<= 0 pos) (<= 0 world-size) (< pos world-size)]
+  ; :post [(every? #(<= 0 %) %) ; all neighbour positions are positive
+  ;        (every? #(not= % pos) %) ; all neighbour positions are not equal to pos
+  ;        (every? #(< % world-size) %) ; all neighbour positions are less than world size
+  ;        ]}
   (let [[x y] (pos->xy world-size pos)
         coords (for [nx (range (dec x) (+ 2 x))
                      ny (range (dec y) (+ 2 y))
@@ -33,18 +33,18 @@
                  [(int nx) (int ny)])]
     (mapv (partial xy->pos world-size) coords)))
 
-(defn get-pos [world pos]
-  {:pre [(<= 0 pos)
-         (< pos (count world))]}
+(defn get-pos [^booleans world ^long pos]
+  ;{:pre [(<= 0 pos)
+  ;       (< pos (count world))]}
   (nth world pos))
 
-(defn count-trues [world]
+(defn count-trues [^booleans world]
   (count (filter identity world)))
 
-(defn evaluate-cell-life [world-count world pos]
-  {:pre [(<= 0 pos)
-         (< pos world-count)]
-   :post [(is (boolean? %) true)]}
+(defn evaluate-cell-life [^long world-count ^booleans world ^long pos]
+  ;{:pre [(<= 0 pos)
+  ;       (< pos world-count)]
+  ; :post [(is (boolean? %) true)]}
   (let [world-size (count world)
         neighbour-pos (neighbour-pos world-size pos)
         neigh-vals (mapv (partial get-pos world) neighbour-pos)
@@ -67,12 +67,14 @@
    :side-count (Math/sqrt (* grid-size grid-size))
    :pos-range (range (* grid-size grid-size))})
 
-(defn update-life [{world :world pos-range :pos-range total-count :total-count :as state}]
+(defn update-life [{^booleans world :world
+                    ^longs pos-range :pos-range
+                    ^long total-count :total-count :as state}]
   (assoc state :world (mapv #(evaluate-cell-life total-count world %) pos-range)))
 
-(defn draw-life [{world :world
-                  total-count :total-count
-                  pos-range :pos-range}]
+(defn draw-life [{^booleans world :world
+                  ^long total-count :total-count
+                  ^longs pos-range :pos-range}]
   ; clear canvas
   (q/background 240)
   (q/fill 255 255 255)
@@ -100,9 +102,11 @@
 ;        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))})))
 
 ; took 6800-7400 msec 
-; (with pre/post conditions, booleans instead of 0 and 1s and precomputed counts
-; still single thread, pretty slow
-(time (dotimes [i 10000]
-        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
-                      :total-count (* 10 10)
-                      :pos-range (range (* 10 10))})))
+; booleans instead of 0 and 1s and precomputed counts: 6800-7400 msec
+; type hints on function arguments: ~6400 ms
+; removed pre/post conditions: ~4800ms
+;(dotimes [i 5]
+;  (time (dotimes [i 10000]
+;          (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
+;                        :total-count (* 10 10)
+;                        :pos-range (range (* 10 10))}))))
