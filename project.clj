@@ -5,4 +5,5 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.11.1"]
                  [quil "4.3.1323"]]
-  :main my-sketch.core)
+  :main my-sketch.core
+  :aot [my-sketch.core])

@@ -1,61 +1,85 @@
 (ns my-sketch.core
   (:require [quil.core :as q]
-            [quil.middleware :as m])
+            [quil.middleware :as m]
+            [clojure.test :refer [is]])
   (:gen-class))
 
-(def grid-size 10)
-(def cell-size 10)
+(def grid-size 100)
+(def cell-size 5)
 
-(defn pos->xy [world pos]
-  [(mod pos (Math/sqrt (count world))) ; x = position % world size
-   (quot pos (Math/sqrt (count world))) ; y = round down to lowest multiple of world size 
+(defn pos->xy [world-size pos]
+  [(mod pos (Math/sqrt world-size)) ; x = position % world size
+   (quot pos (Math/sqrt world-size)) ; y = round down to lowest multiple of world size 
    ])
 
-(defn xy->pos [world x y]
-  (let [max-pos (count world)
-        grid-size (Math/sqrt max-pos)]
+(defn xy->pos [world-size [x y]]
+  (let [grid-size (Math/sqrt world-size)]
     (int (+ (* grid-size y) x))))
 
-(defn neighbour-pos [world pos]
-  (let [[x y] (pos->xy world pos)
-        max-coord (count world)
+(defn neighbour-pos [world-size pos]
+  {:pre [(<= 0 pos) (<= 0 world-size) (< pos world-size)]
+   :post [(every? #(<= 0 %) %) ; all neighbour positions are positive
+          (every? #(not= % pos) %) ; all neighbour positions are not equal to pos
+          (every? #(< % world-size) %) ; all neighbour positions are less than world size
+          ]}
+  (let [[x y] (pos->xy world-size pos)
         coords (for [nx (range (dec x) (+ 2 x))
                      ny (range (dec y) (+ 2 y))
                      :when (and (not= [x y] [nx ny])
                                 (<= 0 nx)
                                 (<= 0 ny)
-                                (< nx max-coord)
-                                (< ny max-coord))]
+                                (< nx (Math/sqrt world-size))
+                                (< ny (Math/sqrt world-size)))]
                  [(int nx) (int ny)])]
-    (mapv #(apply (partial xy->pos world) %) coords)))
+    (mapv (partial xy->pos world-size) coords)))
 
-(defn evaluate-cell-life [world pos]
-  (let [neighbour-pos (neighbour-pos world pos)
-        neigh-vals (mapv (into [] world) (filter #(< % (count world)) neighbour-pos))
-        total-val (apply + neigh-vals)
-        alive? (= (nth world pos) 1)]
+(defn get-pos [world pos]
+  {:pre [(<= 0 pos)
+         (< pos (count world))]}
+  (nth world pos))
+
+(defn count-trues [world]
+  (count (filter identity world)))
+
+(defn evaluate-cell-life [world-count world pos]
+  {:pre [(<= 0 pos)
+         (< pos world-count)]
+   :post [(is (boolean? %) true)]}
+  (let [world-size (count world)
+        neighbour-pos (neighbour-pos world-size pos)
+        neigh-vals (mapv (partial get-pos world) neighbour-pos)
+        total-val (count-trues neigh-vals)
+        alive? (nth world pos)]
     (cond
-      (and alive? (< 1 total-val 4)) 1
-      (= 3 total-val) 1
-      :else 0)))
+      (= 3 total-val) true
+      (and alive? (< 1 total-val 4)) true
+      :else false)))
+
+(defn rand-bool []
+  (= 0 (rand-int 2)))
 
 (defn life-setup []
-  (q/frame-rate 60)
+  (q/frame-rate 30)
   (q/color-mode :hsb)
   (q/no-stroke)
-  {:world (into [] (take (* grid-size grid-size) (repeatedly #(rand-int 2))))})
+  {:world (^booleans into [] (take (* grid-size grid-size) (repeatedly #(rand-bool))))
+   :total-count (* grid-size grid-size)
+   :side-count (Math/sqrt (* grid-size grid-size))
+   :pos-range (range (* grid-size grid-size))})
 
-(defn update-life [{world :world}]
-  {:world (mapv #(evaluate-cell-life world %) (range (count world)))})
+(defn update-life [{world :world pos-range :pos-range total-count :total-count :as state}]
+  (assoc state :world (mapv #(evaluate-cell-life total-count world %) pos-range)))
 
-(defn draw-life [{world :world}]
+(defn draw-life [{world :world
+                  total-count :total-count
+                  pos-range :pos-range}]
   ; clear canvas
   (q/background 240)
   (q/fill 255 255 255)
-  (doseq [pos (range (count world))]
-    (let [[x y] (pos->xy world pos)
-          cell-value (nth world pos)]
-      (q/fill (if (= 0 cell-value) 255 0))
+  (doseq [pos pos-range]
+    (let [[x y] (pos->xy total-count pos)
+          cell-value (get-pos world pos)]
+      (q/fill (if cell-value 0 255))
       (q/rect (* x cell-size) (* cell-size y) cell-size cell-size))))
 
 (defn -main [& _]
@@ -69,11 +93,16 @@
     :features [:keep-on-top]
     :middleware [m/fun-mode]))
 
-(time (take 1 (iterate update-life {:world (into [] (take (* grid-size grid-size) (repeatedly #(rand-int 2))))})))
+;(time (take 1 (iterate update-life {:world (into [] (take (* grid-size grid-size) (repeatedly #(rand-bool))))})))
 
 ; took ~9000 msec
+;(time (dotimes [i 10000]
+;        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))})))
+
+; took 6800-7400 msec 
+; (with pre/post conditions, booleans instead of 0 and 1s and precomputed counts
+; still single thread, pretty slow
 (time (dotimes [i 10000]
-        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-int 2))))})))
-
-
-
+        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
+                      :total-count (* 10 10)
+                      :pos-range (range (* 10 10))})))
