@@ -45,8 +45,7 @@
   ;{:pre [(<= 0 pos)
   ;       (< pos world-count)]
   ; :post [(is (boolean? %) true)]}
-  (let [world-size (count world)
-        neighbour-pos (neighbour-pos world-size pos)
+  (let [neighbour-pos (neighbour-pos world-count pos)
         neigh-vals (mapv (partial get-pos world) neighbour-pos)
         total-val (count-trues neigh-vals)
         alive? (nth world pos)]
@@ -62,15 +61,19 @@
   (q/frame-rate 30)
   (q/color-mode :hsb)
   (q/no-stroke)
-  {:world (^booleans into [] (take (* grid-size grid-size) (repeatedly #(rand-bool))))
+  {:world (^booleans vec (take (* grid-size grid-size) (repeatedly #(rand-bool))))
    :total-count (* grid-size grid-size)
    :side-count (Math/sqrt (* grid-size grid-size))
    :pos-range (range (* grid-size grid-size))})
 
 (defn update-life [{^booleans world :world
                     ^longs pos-range :pos-range
-                    ^long total-count :total-count :as state}]
-  (assoc state :world (mapv #(evaluate-cell-life total-count world %) pos-range)))
+                    ^long total-count :total-count
+                    :as state}]
+  (assoc state :world (->> (partition (int (Math/ceil (/ total-count 4))) pos-range)
+                           (pmap (fn [partitioned-range]
+                                   (mapv #(evaluate-cell-life total-count world %) partitioned-range)))
+                           ((comp vec flatten)))))
 
 (defn draw-life [{^booleans world :world
                   ^long total-count :total-count
@@ -105,8 +108,13 @@
 ; booleans instead of 0 and 1s and precomputed counts: 6800-7400 msec
 ; type hints on function arguments: ~6400 ms
 ; removed pre/post conditions: ~4800ms
-;(dotimes [i 5]
-;  (time (dotimes [i 10000]
-;          (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
-;                        :total-count (* 10 10)
-;                        :pos-range (range (* 10 10))}))))
+; use (doall (pmap ...)) instead of mapv: ~6600ms which is interesting 
+
+(def world-vect (into [] (take (* 3 3) (repeatedly #(rand-bool)))))
+(def partitioned-range (partition (int (Math/ceil (/ (count world-vect) 4))) (range 9)))
+(def pmapped (pmap (fn [part-range] (mapv #(evaluate-cell-life 9 world-vect %) part-range)) partitioned-range))
+((comp vec flatten) pmapped)
+;(time (dotimes [i 10000]
+;        (update-life {:world (into [] (take (* 10 10) (repeatedly #(rand-bool))))
+;                      :total-count (* 10 10)
+;                      :pos-range (range (* 10 10))})))
