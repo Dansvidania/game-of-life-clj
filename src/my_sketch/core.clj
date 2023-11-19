@@ -4,8 +4,8 @@
             [clojure.test :refer [is]])
   (:gen-class))
 
-(def grid-size 120)
-(def cell-size 10)
+(def grid-size 100)
+(def cell-size 5)
 
 (defn pos->xy [^long world-size ^long pos]
   [(mod pos (Math/sqrt world-size)) ; x = position % world size
@@ -70,28 +70,53 @@
                     ^longs pos-range :pos-range
                     ^long total-count :total-count
                     :as state}]
-  (assoc state :world (->> (partition (int (Math/ceil (/ total-count 16))) pos-range)
-                           (pmap (fn [partitioned-range]
-                                   (mapv #(evaluate-cell-life total-count world %) partitioned-range)))
-                           ((comp vec flatten)))))
+  (assoc state :world
+         (->> (partition-all (int (Math/ceil (/ total-count 16))) pos-range)
+              (pmap (fn [partitioned-range]
+                      (mapv #(evaluate-cell-life total-count world %)
+                            partitioned-range)))
+              ((comp vec flatten)))))
+
+(defn draw-partition
+  ([total-count pos-range world]
+   (draw-partition total-count pos-range world 255))
+  ([total-count pos-range world color]
+   (doseq [pos pos-range]
+     (let [[x y] (pos->xy total-count pos)
+           cell-value (get-pos world pos)]
+       (q/fill (if cell-value 0 color))
+       (q/rect (* (+ x) cell-size) (* cell-size y) cell-size cell-size)))))
 
 (defn draw-life [{^booleans world :world
+                  ^booleans prev-world :prev-world
                   ^long total-count :total-count
                   ^longs pos-range :pos-range}]
-  ; clear canvas
-  (q/background 240)
-  (q/fill 255 255 255)
-  (doseq [pos pos-range]
-    (let [[x y] (pos->xy total-count pos)
-          cell-value (get-pos world pos)]
-      (q/fill (if cell-value 0 255))
-      (q/rect (* x cell-size) (* cell-size y) cell-size cell-size))))
+  (let [offset (int (Math/ceil (/ total-count 16)))
+        [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 p15 p16]
+        (vec (partition-all offset pos-range))]
+    (pcalls
+     (draw-partition total-count p1 world)
+     (draw-partition total-count p2 world)
+     (draw-partition total-count p3 world)
+     (draw-partition total-count p4 world)
+     (draw-partition total-count p5 world)
+     (draw-partition total-count p6 world)
+     (draw-partition total-count p7 world)
+     (draw-partition total-count p8 world)
+     (draw-partition total-count p9 world)
+     (draw-partition total-count p10 world)
+     (draw-partition total-count p11 world)
+     (draw-partition total-count p12 world)
+     (draw-partition total-count p13 world)
+     (draw-partition total-count p14 world)
+     (draw-partition total-count p15 world)
+     (draw-partition total-count p16 world))))
 
 (defn -main [& _]
   (println "starting animation")
   (q/defsketch life
     :title "game of life"
-    :size [1000 1000]
+    :size [500 500]
     :setup life-setup
     :update update-life
     :draw draw-life
