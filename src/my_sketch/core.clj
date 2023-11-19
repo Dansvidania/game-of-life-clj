@@ -1,15 +1,15 @@
 (ns my-sketch.core
   (:require [quil.core :as q]
-            [quil.middleware :as m]
-            [clojure.test :refer [is]])
+            [quil.middleware :as m])
+  (:import [java.util BitSet])
   (:gen-class))
 
 (def grid-size 100)
 (def cell-size 5)
 
 (defn pos->xy [^long world-size ^long pos]
-  [(mod pos (Math/sqrt world-size)) ; x = position % world size
-   (quot pos (Math/sqrt world-size)) ; y = round down to lowest multiple of world size 
+  [(mod pos (Math/sqrt world-size)) ; x= (modulo position world-size)
+   (quot pos (Math/sqrt world-size)) ; y=round down to lowest multiple of grid size 
    ])
 
 (defn xy->pos [^long world-size [^long x ^long y]]
@@ -33,76 +33,96 @@
                  [(int nx) (int ny)])]
     (mapv (partial xy->pos world-size) coords)))
 
-(defn get-pos [^booleans world ^long pos]
+(defn get-pos [^BitSet world ^long pos]
   ;{:pre [(<= 0 pos)
   ;       (< pos (count world))]}
-  (nth world pos))
+  (.get world pos))
+
+(defn set-pos [^BitSet world ^long pos value]
+  ;{:pre [(<= 0 pos)
+  ;       (< pos (count world))]}
+  (.set world pos value))
+
+; print the world: 0 = dead, X = alive
+(defn print-world [^BitSet world]
+  (let [size (.size world)
+        rows-size (int (Math/sqrt size))
+        wrld (mapv #(if % "\u2588" " ") (mapv #(get-pos world %) (range size)))]
+    (doseq [i (range rows-size)]
+      (println (apply str (take rows-size (drop (* i rows-size) wrld)))))))
+
+(defn rand-bool []
+  (= 0 (rand-int 2)))
+
+(defn switch-on-random-cell [^BitSet world]
+  (let [size (.size world)
+        rand-pos (rand-int size)]
+    (set-pos world rand-pos true)))
+
+(defn clear-world [^BitSet world]
+  (let [size (.size world)]
+    (dotimes [i size]
+      (set-pos world i false))))
+
+; initialize new world with random bit values
+(defn new-world [^long world-size]
+  (let [world (BitSet.)]
+    (dotimes [i world-size]
+      (.set world i (rand-bool)))
+    world))
 
 (defn count-trues [^booleans world]
   (count (filter identity world)))
 
-(defn evaluate-cell-life [^long world-count ^booleans world ^long pos]
+(defn evaluate-cell-life [^long world-count ^BitSet world ^long pos]
   ;{:pre [(<= 0 pos)
   ;       (< pos world-count)]
   ; :post [(is (boolean? %) true)]}
   (let [neighbour-pos (neighbour-pos world-count pos)
         neigh-vals (mapv (partial get-pos world) neighbour-pos)
         total-val (count-trues neigh-vals)
-        alive? (nth world pos)]
+        alive? (get-pos world pos)]
     (cond
       (= 3 total-val) true
       (and alive? (< 1 total-val 4)) true
       :else false)))
 
-(defn rand-bool []
-  (= 0 (rand-int 2)))
+(defn update-world! [^BitSet world]
+  (let [size (.size world)
+        old-world (.clone world)]
+    (dotimes [i size]
+      (set-pos world i (evaluate-cell-life size old-world i)))))
 
 (defn life-setup []
   (q/frame-rate 30)
   (q/color-mode :hsb)
   (q/no-stroke)
-  {:world (^booleans vec (take (* grid-size grid-size) (repeatedly #(rand-bool))))
-   :prev-world (^booleans vec (take (* grid-size grid-size) (repeatedly #(constantly false))))
+  {:world (new-world (* grid-size grid-size))
    :total-count (* grid-size grid-size)
    :side-count grid-size
    :pos-range (range (* grid-size grid-size))})
 
-(defn update-life [{^booleans world :world
-                    ^longs pos-range :pos-range
-                    ^long total-count :total-count
-                    :as state}]
-  (assoc state :world
-         (->> (partition-all (int (Math/ceil (/ total-count 16))) pos-range)
-              (pmap (fn [partitioned-range]
-                      (mapv #(evaluate-cell-life total-count world %)
-                            partitioned-range)))
-              ((comp vec flatten)))))
+(defn update-life [{^BitSet world :world :as state}]
+  (let [old-world (.clone world)]
+    (update-world! world)
+    (assoc state
+           :world world
+           :prev-world old-world)))
 
 (defn draw-partition
-  ([total-count pos-range world]
-   (draw-partition total-count pos-range world 255))
-  ([total-count pos-range world color]
-   (doseq [pos pos-range]
-     (let [[x y] (pos->xy total-count pos)
-           cell-value (get-pos world pos)]
-       (q/fill (if cell-value 0 color))
-       (q/rect (* x cell-size) (* cell-size y) cell-size cell-size)))))
-
-(defn draw-change
-  [total-count pos-range world prev-world]
+  [^long total-count ^longs pos-range ^BitSet world]
+  ; clear background
+  (q/background 0)
   (doseq [pos pos-range]
     (let [[x y] (pos->xy total-count pos)
-          cell-value (get-pos world pos)
-          prev-cell-value (get-pos prev-world pos)]
-      (when (not= cell-value prev-cell-value)
-        (q/fill (if cell-value 0 255))
-        (q/rect (* x cell-size) (* cell-size y) cell-size cell-size)))))
+          cell-value (get-pos world pos)]
+      (q/fill (if cell-value 0 255))
+      (q/rect (* x cell-size) (* cell-size y) cell-size cell-size))))
 
 (defn draw-life [{^booleans world :world
-                  ^booleans prev-world :prev-world
                   ^long total-count :total-count
                   ^longs pos-range :pos-range}]
-  (draw-change total-count pos-range world prev-world))
+  (draw-partition total-count pos-range world))
 
 (defn -main [& _]
   (println "starting animation")
