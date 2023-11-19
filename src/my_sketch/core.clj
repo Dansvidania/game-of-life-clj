@@ -62,6 +62,7 @@
   (q/color-mode :hsb)
   (q/no-stroke)
   {:world (^booleans vec (take (* grid-size grid-size) (repeatedly #(rand-bool))))
+   :prev-world (^booleans vec (take (* grid-size grid-size) (repeatedly #(constantly false))))
    :total-count (* grid-size grid-size)
    :side-count grid-size
    :pos-range (range (* grid-size grid-size))})
@@ -85,32 +86,23 @@
      (let [[x y] (pos->xy total-count pos)
            cell-value (get-pos world pos)]
        (q/fill (if cell-value 0 color))
-       (q/rect (* (+ x) cell-size) (* cell-size y) cell-size cell-size)))))
+       (q/rect (* x cell-size) (* cell-size y) cell-size cell-size)))))
+
+(defn draw-change
+  [total-count pos-range world prev-world]
+  (doseq [pos pos-range]
+    (let [[x y] (pos->xy total-count pos)
+          cell-value (get-pos world pos)
+          prev-cell-value (get-pos prev-world pos)]
+      (when (not= cell-value prev-cell-value)
+        (q/fill (if cell-value 0 255))
+        (q/rect (* x cell-size) (* cell-size y) cell-size cell-size)))))
 
 (defn draw-life [{^booleans world :world
                   ^booleans prev-world :prev-world
                   ^long total-count :total-count
                   ^longs pos-range :pos-range}]
-  (let [offset (int (Math/ceil (/ total-count 16)))
-        [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 p11 p12 p13 p14 p15 p16]
-        (vec (partition-all offset pos-range))]
-    (pcalls
-     (draw-partition total-count p1 world)
-     (draw-partition total-count p2 world)
-     (draw-partition total-count p3 world)
-     (draw-partition total-count p4 world)
-     (draw-partition total-count p5 world)
-     (draw-partition total-count p6 world)
-     (draw-partition total-count p7 world)
-     (draw-partition total-count p8 world)
-     (draw-partition total-count p9 world)
-     (draw-partition total-count p10 world)
-     (draw-partition total-count p11 world)
-     (draw-partition total-count p12 world)
-     (draw-partition total-count p13 world)
-     (draw-partition total-count p14 world)
-     (draw-partition total-count p15 world)
-     (draw-partition total-count p16 world))))
+  (draw-change total-count pos-range world prev-world))
 
 (defn -main [& _]
   (println "starting animation")
